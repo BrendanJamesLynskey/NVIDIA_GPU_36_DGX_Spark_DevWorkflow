@@ -797,7 +797,7 @@
         <li><a href="#slide-06">JupyterHub for Multi-User Spark</a></li>
         <li><a href="#slide-07">Fine-Tuning &mdash; QLoRA, FSDP, NeMo</a></li>
         <li><a href="#slide-08">Dataset Storage &amp; Streaming</a></li>
-        <li><a href="#slide-09">Quantisation Pipeline &mdash; HF &rarr; MX-FP4 NIM</a></li>
+        <li><a href="#slide-09">Quantisation Pipeline &mdash; HF &rarr; NVFP4 / MX-FP4 NIM</a></li>
         <li><a href="#slide-10">Custom Kernels with Triton on Spark</a></li>
         <li><a href="#slide-11">Spark Local + Cloud Burst Pattern</a></li>
         <li><a href="#slide-12">Interactive: Pick Your Workflow</a></li>
@@ -1000,13 +1000,13 @@ sudo tljh-config reload</code></pre>
 
 <section class="slide" id="slide-09">
     <div class="slide-number">09</div>
-    <h2>Quantisation Pipeline &mdash; HF &rarr; MX-FP4 NIM</h2>
-    <p>You fine-tuned in BF16 / QLoRA. Now you want to deploy in MX-FP4 to a 7 tok/s decode throughput. The pipeline:</p>
+    <h2>Quantisation Pipeline &mdash; HF &rarr; NVFP4 / MX-FP4 NIM</h2>
+    <p>You fine-tuned in BF16 / QLoRA. Now you want to deploy in FP4 to a 7 tok/s decode throughput. Blackwell's 5th-gen tensor cores accelerate <strong>both NVFP4 and MX-FP4</strong>; NVFP4 (16-element blocks, E4M3 scale + per-tensor FP32) is the default in TensorRT-LLM and Transformer Engine, while MX-FP4 (32-element blocks, E8M0 scale) follows the OCP MX spec. The pipeline:</p>
 
     <ol>
         <li><strong>Merge LoRA back into the base weights</strong>: <code>peft.merge_and_unload()</code> &rarr; full BF16 model on disk.</li>
-        <li><strong>Convert to MX-FP4 with TensorRT-LLM</strong>: <code>quantize.py --kv_cache_dtype fp8 --qformat mx_fp4</code> &mdash; calibrates per-microblock scales on a small calibration set.</li>
-        <li><strong>Build TRT-LLM engine</strong>: <code>trtllm-build --checkpoint_dir ./calib --quantization mxfp4 --output_dir ./engine</code> &mdash; ~15&ndash;25 minutes on Spark for a 70 B.</li>
+        <li><strong>Convert to FP4 with TensorRT-LLM</strong>: <code>quantize.py --kv_cache_dtype fp8 --qformat nvfp4</code> (or <code>mx_fp4</code>) &mdash; calibrates per-microblock scales on a small calibration set.</li>
+        <li><strong>Build TRT-LLM engine</strong>: <code>trtllm-build --checkpoint_dir ./calib --quantization nvfp4 --output_dir ./engine</code> &mdash; ~15&ndash;25 minutes on Spark for a 70 B.</li>
         <li><strong>Wrap as NIM</strong>: NVIDIA's <code>nim-builder</code> tool packages a TRT-LLM engine into an OpenAI-compatible NIM container.</li>
         <li><strong>Run</strong>: <code>docker run --gpus all -p 8000:8000 my-org/llama3.3-70b-mxfp4-nim:v1</code>.</li>
     </ol>
