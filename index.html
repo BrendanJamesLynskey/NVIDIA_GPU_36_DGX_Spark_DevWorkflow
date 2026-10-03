@@ -898,7 +898,7 @@
         <pre><code>curl -fsSL <span class="str">https://astral.sh/uv/install.sh</span> | sh
 uv venv -p <span class="num">3.12</span> .venv
 source .venv/bin/activate
-uv pip install torch torchvision torchaudio --index-url <span class="str">https://download.pytorch.org/whl/cu125</span>
+uv pip install torch torchvision torchaudio --index-url <span class="str">https://download.pytorch.org/whl/cu130</span>
 uv pip install transformers accelerate peft datasets bitsandbytes vllm</code></pre>
     </div>
 </section>
@@ -906,11 +906,11 @@ uv pip install transformers accelerate peft datasets bitsandbytes vllm</code></p
 <section class="slide" id="slide-05">
     <div class="slide-number">05</div>
     <h2>PyTorch &amp; Friends on Spark</h2>
-    <p>PyTorch on Spark ARM64 + CUDA 12.5 is fully supported as of 2.4. Compile-once-run-anywhere: code that works on Spark works on a cloud H100 with the same wheel index.</p>
+    <p>PyTorch on Spark ARM64 + CUDA 13.0 is supported via the <code>cu130</code> aarch64 wheels (GB10 is <code>sm_121</code>, which CUDA 12.x builds do not target). Compile-once-run-anywhere: code that works on Spark works on a cloud H100 with the same wheel index.</p>
 
     <ul>
         <li><strong>torch.compile</strong> works; first compile takes longer on Spark than on a beefy x86 + 5090 (CPU side is slower), but caches normally.</li>
-        <li><strong>Flash-Attention</strong>: <code>flash-attn</code> 2.6+ has ARM64 wheels. Flash-Attn 3 is Hopper+ only &mdash; works on Blackwell-class Spark.</li>
+        <li><strong>Flash-Attention</strong>: <code>flash-attn</code> 2.6+ has ARM64 wheels. Flash-Attn 3 is Hopper-only (H100/H800); Blackwell support is in FlashAttention-4.</li>
         <li><strong>bitsandbytes</strong>: ARM64 wheel from 0.43; 8-bit optimisers and 4-bit quantised models work.</li>
         <li><strong>Triton</strong>: bundled with PyTorch; native ARM64 from Triton 3.0. Custom kernels portable.</li>
         <li><strong>JAX</strong>: <code>jax[cuda12]</code> wheel works; less common in this stack but supported.</li>
@@ -956,7 +956,7 @@ sudo tljh-config reload</code></pre>
         <table>
             <thead><tr><th>Approach</th><th>Model size feasible</th><th>Tool</th><th>Notes</th></tr></thead>
             <tbody>
-                <tr><td>Full BF16 fine-tune</td><td>up to ~7 B</td><td>HF Trainer / NeMo SFT</td><td>weights+grad+optim ~ 6&times; param count in bytes</td></tr>
+                <tr><td>Full BF16 fine-tune</td><td>up to ~7 B</td><td>HF Trainer / NeMo SFT</td><td>weights+grad+Adam state ~16 bytes per param (mixed precision): 7 B &rarr; ~112 GB</td></tr>
                 <tr><td>BF16 + FSDP CPU offload</td><td>up to ~13 B</td><td>HF + Accelerate</td><td>slow; CPU-GPU traffic over unified-mem fabric</td></tr>
                 <tr><td><strong>LoRA on BF16 base</strong></td><td><strong>up to ~32 B</strong></td><td>peft + transformers</td><td>frozen weights at BF16; only adapters train</td></tr>
                 <tr><td><strong>QLoRA (NF4 base + BF16 LoRA)</strong></td><td><strong>up to ~70 B</strong></td><td>peft + bitsandbytes</td><td>the canonical Spark fine-tuning recipe</td></tr>
@@ -987,8 +987,8 @@ sudo tljh-config reload</code></pre>
     <ul>
         <li><strong>4 TB NVMe SKU recommended</strong> for serious dataset work. Models pile up: 35 GB per 70 B-class checkpoint, &times; several variants, plus datasets.</li>
         <li><strong>HF datasets</strong>: <code>load_dataset(streaming=True)</code> works around capacity for large corpora. Apache Arrow over the shared LPDDR5x is fast.</li>
-        <li><strong>NFS mount</strong>: 1 GbE management port limits NFS reads to ~100 MB/s; OK for episodic dataset access, slow for steady training.</li>
-        <li><strong>200 GbE NAS</strong>: a TrueNAS box on the QSFP28 link delivers ~6 GB/s &mdash; useful if you have one.</li>
+        <li><strong>NFS mount</strong>: the 10 GbE RJ-45 port limits NFS reads to ~1 GB/s; OK for episodic dataset access, slow for steady training.</li>
+        <li><strong>200 GbE NAS</strong>: a TrueNAS box on the QSFP link delivers ~6 GB/s &mdash; useful if you have one.</li>
         <li><strong>Cloud-side data lake</strong>: S3 or Lustre via <code>boto3</code> over Wi-Fi 7; ~300&ndash;500 MB/s real-world. Stream training samples on demand.</li>
     </ul>
 
@@ -1017,7 +1017,7 @@ sudo tljh-config reload</code></pre>
 <section class="slide" id="slide-10">
     <div class="slide-number">10</div>
     <h2>Custom Kernels with Triton on Spark</h2>
-    <p>Triton works fully on Spark's Blackwell GPU. The compiler emits PTX targeting <code>sm_100</code>; you get tensor-core acceleration with a Python-like kernel DSL.</p>
+    <p>Triton works fully on Spark's Blackwell GPU. The compiler emits PTX targeting GB10's <code>sm_121</code>; you get tensor-core acceleration with a Python-like kernel DSL.</p>
 
     <div class="code-block">
         <div class="code-header">Triton matmul on Spark</div>
